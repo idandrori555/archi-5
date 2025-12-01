@@ -6,7 +6,7 @@ P equ 7
 Q equ 2
 
 totient dw 0x0 ; totient
-pub_key dw 0x4
+pub_key dw 0x3 ; pubkey
 
 ; stdcall
 ; calculates totient
@@ -34,8 +34,14 @@ PROC modulus
     push bp
     mov bp, sp
     
-    mov ax, [bp + 4] ; num1
-    mov bx, [bp + 6] ; num2
+    mov bx, [bp + 6]
+    cmp bx, 0 ; cant divide by 0
+    je modulus_end
+    
+    mov ax, [bp + 4]
+
+    
+    
     
 modulus_loop:    
     cmp ax, bx
@@ -144,7 +150,54 @@ PROC is_valid_pub_key
     pop bp
     ret 2
 ENDP is_valid_pub_key
+
+; stdcall
+; calculates a valid private key for a given public key
+; returns the private key if found, 0 if not found.
+PROC calc_private_key
+    push bp
+    mov bp, sp
     
+    mov bx, [bp + 4] ; pubkey
+    mov cx, [totient]
+    dec cx ; all numbers < totient
+
+    xor ax, ax
+    cmp cx, 0
+    jle calc_private_key_end
+    
+calc_private_key_loop:
+    mov ax, cx ; move number to ax
+    mul bx ; ax = pubkey*num
+    
+    push ax
+    push bx
+    push cx
+    
+    push [totient] ; totient
+    push ax ; pubkey*num
+    call modulus ; do pubkey*num % toteint
+    
+    pop cx
+    pop bx
+    pop ax
+    
+    cmp ax, 1
+    je valid_private_key_found
+    
+    loop calc_private_key_loop ; else, continue, cx--
+    
+    ; outside loop: not found
+    xor ax, ax
+    jmp calc_private_key_end
+                   
+valid_private_key_found:
+    mov ax, cx ; if it is 1, move num to ax and return it
+    
+calc_private_key_end:    
+    pop bp
+    ret 2
+ENDP calc_private_key
 
 start:
     ; STEP 1 - Calc totient
@@ -159,8 +212,11 @@ start:
     call is_valid_pub_key
     
     cmp ax, 0; check if the public key is invalid
-    je end 
-
+    je end
+    
+    ; STEP 3 - Calc private key
+    push [pub_key]
+    call calc_private_key 
 end:
     xor ah, ah
     int 16h
